@@ -1,12 +1,16 @@
+#include <Servo.h>
+
 // Define motor control pins
 const int motor1Pin1 = 2;
 const int motor1Pin2 = 3;
-const int motor1EnablePin = 9; // PWM pin for motor 1 speed control
+const int motor1EnablePin = 6; // PWM pin for motor 1 speed control
 const int motor2Pin1 = 4;
 const int motor2Pin2 = 5;
-const int motor2EnablePin = 10; // PWM pin for motor 2 speed control
+const int motor2EnablePin = 11; // PWM pin for motor 2 speed control
 
-const int LED = 8;
+const int LED = A3;
+const int servoPin = 9; 
+const int relayPin = 12;
 // Define flame sensor pins
 const int flameSensorPinLeft = A0;
 const int flameSensorPinCenter = A1;
@@ -25,40 +29,23 @@ int readingsRight[numReadings];
 // Motor speed
 const int motorSpeed = 100;
 
-// Function to detect flame
-bool isFlameDetected(int pin, int readings[], bool &lowThresholdDetected) {
-  int countBelowThreshold = 0;
-  int countBelowLowThreshold = 0;
-  lowThresholdDetected = false;
-  // Take multiple readings from the sensor and store them in the array
-  for (int i = 0; i < numReadings; i++) {
-    readings[i] = analogRead(pin);
-    Serial.print("\t ");
-    Serial.print(readings[i]);
-    delay(50); // Small delay between readings for stability
-  }
-  Serial.println();
-   
+// Servo motor object
+Servo myServo;
 
-  // Compare readings to the threshold and count how many are above it
-  for (int i = 0; i < numReadings; i++) {
-    if (readings[i] < threshold) {
-      countBelowThreshold++;
-    }
-    if (readings[i] < lowThreshold) {
-      countBelowLowThreshold++;
-    }
-  }
-  if(countBelowLowThreshold>(countBelowThreshold/2)){
-    lowThresholdDetected = true;
-  }
-
-  // Decide if a flame is detected based on the count of readings above the threshold
-  return countBelowThreshold > numReadings / 2;
-}
 
 // Function to move the robot forward
 void moveForward() {
+  digitalWrite(motor1Pin1, LOW);
+  digitalWrite(motor1Pin2, HIGH);
+  digitalWrite(motor2Pin1, LOW);
+  digitalWrite(motor2Pin2, HIGH);
+  analogWrite(motor1EnablePin, motorSpeed);
+  analogWrite(motor2EnablePin, motorSpeed);
+ 
+}
+
+ // Function to move the robot in reverse
+void moveReverse() {
   digitalWrite(motor1Pin1, HIGH);
   digitalWrite(motor1Pin2, LOW);
   digitalWrite(motor2Pin1, HIGH);
@@ -97,6 +84,75 @@ void turnRight() {
   analogWrite(motor2EnablePin, motorSpeed);
 }
 
+// Function to detect flame
+bool isFlameDetected(int pin, int readings[]) {
+  int countBelowThreshold = 0;
+  int countBelowLowThreshold = 0;
+  //lowThresholdDetected = false;
+  // Take multiple readings from the sensor and store them in the array
+  for (int i = 0; i < numReadings; i++) {
+    readings[i] = analogRead(pin);
+    Serial.print("\t ");
+    Serial.print(readings[i]);
+    delay(50); // Small delay between readings for stability
+  }
+  Serial.println();
+   
+
+  // Compare readings to the threshold and count how many are above it
+  for (int i = 0; i < numReadings; i++) {
+    if (readings[i] < threshold) {
+      countBelowThreshold++;
+    }
+    if (readings[i] < lowThreshold) {
+      countBelowLowThreshold++;
+    }
+  }
+  if(countBelowLowThreshold>(countBelowThreshold/2)){
+    //lowThresholdDetected = true;
+  }
+
+  // Decide if a flame is detected based on the count of readings above the threshold
+  return countBelowThreshold > numReadings / 2;
+}
+
+void sprayWaterAndRotateServo() {
+  // Activate the relay at the start of spraying
+  digitalWrite(relayPin, LOW); // Start the pump
+  
+  for (int i = 0; i < 1; i++) {
+    // Sweep the servo 45 degrees to the right and left
+    for (int angle = 0; angle <= 45; angle += 5) {
+      myServo.write(90 + angle); // Rotate servo to the right
+      delay(100); // Small delay to let the servo move
+    }
+    for (int angle = 45; angle >= -45; angle -= 5) {
+      myServo.write(90 + angle); // Rotate servo to the left
+      delay(100); // Small delay to let the servo move
+    }
+    for (int angle = -45; angle <= 0; angle += 5) {
+      myServo.write(90 + angle); // Return to the center position
+      delay(100); // Small delay to let the servo move
+    }
+
+    /*/ Check flame sensor readings while rotating
+    bool lowThresholdDetectedLeft = false;
+    bool lowThresholdDetectedCenter = false;
+    bool lowThresholdDetectedRight = false;
+    bool flameDetectedCenter = isFlameDetected(flameSensorPinLeft, readingsLeft, lowThresholdDetectedLeft);
+    bool flameDetectedLeft = isFlameDetected(flameSensorPinCenter, readingsCenter, lowThresholdDetectedCenter);
+    bool flameDetectedRight = isFlameDetected(flameSensorPinRight, readingsRight, lowThresholdDetectedRight);
+
+    if (flameDetectedCenter || flameDetectedLeft || flameDetectedRight) {
+      // Stop spraying if flame still detected after two full sweeps
+      digitalWrite(relayPin, LOW); // Deactivate the relay (stop the pump)
+      return;
+    }*/
+  }
+  // Deactivate the relay after completing sweeps
+  digitalWrite(relayPin, HIGH); // Stop the pump
+}
+
 void setup() {
   // Initialize serial communication
   Serial.begin(9600);
@@ -108,12 +164,22 @@ void setup() {
   pinMode(motor2Pin1, OUTPUT);
   pinMode(motor2Pin2, OUTPUT);
   pinMode(motor2EnablePin, OUTPUT);
+
   pinMode(LED, OUTPUT);
+  pinMode(relayPin, OUTPUT);
+
 
   // Initialize flame sensor pins as input
   pinMode(flameSensorPinLeft, INPUT);
   pinMode(flameSensorPinCenter, INPUT);
   pinMode(flameSensorPinRight, INPUT);
+
+  
+  myServo.attach(servoPin);
+  myServo.write(90); // Start servo in the center position
+  digitalWrite(relayPin, HIGH); // Deactivate the relay (stop the pump)
+
+  
 }
 
 void loop() {
@@ -121,30 +187,26 @@ void loop() {
   bool lowThresholdDetectedCenter = false;
   bool lowThresholdDetectedRight = false;
 
-  bool flameDetectedCenter = isFlameDetected(flameSensorPinCenter, readingsCenter, lowThresholdDetectedCenter);
-  bool flameDetectedLeft = isFlameDetected(flameSensorPinLeft, readingsLeft, lowThresholdDetectedLeft);
-  bool flameDetectedRight = isFlameDetected(flameSensorPinRight, readingsRight, lowThresholdDetectedRight);
+  bool flameDetectedCenter = isFlameDetected(flameSensorPinCenter, readingsCenter);
+  bool flameDetectedLeft = isFlameDetected(flameSensorPinLeft, readingsLeft);
+  bool flameDetectedRight = isFlameDetected(flameSensorPinRight, readingsRight);
 
-  if (lowThresholdDetectedLeft || lowThresholdDetectedCenter || lowThresholdDetectedRight) {
-    Serial.println("Flame detected with low threshold. Stopping and spraying.");
-    stopMoving();
-    for (int i = 0; i < 3; i++) {
-    digitalWrite(LED,HIGH);  // Turn the LED on
-    delay(10);                  // Wait for 500 milliseconds
-    digitalWrite(LED, LOW);   // Turn the LED off
-    delay(50);                  // Wait for 500 milliseconds
-  }
   
-    // Add code to start spraying here
-
-  } else if (flameDetectedCenter) {
+  
+  
+  if (flameDetectedCenter) {
     Serial.println("Flame detected in the center.");
     digitalWrite(LED, HIGH);
     moveForward();
     delay(400);
-    digitalWrite(LED, LOW);
+    //digitalWrite(LED, LOW);
     stopMoving();
-    delay(1000);
+    delay(400);
+    digitalWrite(LED, LOW);
+    if(true){
+      sprayWaterAndRotateServo();
+    }
+    
   } else if (flameDetectedLeft) {
     Serial.println("Flame detected on the left.");
     digitalWrite(LED, HIGH);
@@ -152,7 +214,7 @@ void loop() {
     delay(500);
     digitalWrite(LED, LOW);
     stopMoving();
-    delay(1000);
+    delay(400);
   
   } else if (flameDetectedRight) {
     Serial.println("Flame detected on the right.");
@@ -161,13 +223,36 @@ void loop() {
     delay(500);
     digitalWrite(LED, LOW);
     stopMoving();
-    delay(1000);
+    delay(400);
   } else {
     Serial.println("No Flame detected!");
     digitalWrite(LED, LOW);
     stopMoving();
-    delay(1000);
+    delay(400);
+    
   }
 
   //delay(500); // Wait a bit before checking again
 }
+
+
+/*
+  if (lowThresholdDetectedLeft || lowThresholdDetectedCenter || lowThresholdDetectedRight) {
+    
+    Serial.println("Flame detected with low threshold. Stopping and spraying.");
+    stopMoving();
+    for (int i = 0; i < 3; i++) {
+    digitalWrite(LED,HIGH);  // Turn the LED on
+    delay(10);                  // Wait for 500 milliseconds
+    digitalWrite(LED, LOW);   // Turn the LED off
+    delay(50);                  // Wait for 500 milliseconds
+    
+    digitalWrite(LED,HIGH);  // Turn the LED on
+    delay(10);                  // Wait for 500 milliseconds
+    digitalWrite(LED, LOW);   // Turn the LED off
+    delay(50);                  // Wait for 500 milliseconds
+  
+  
+    // Add code to start spraying here
+
+  } else */
