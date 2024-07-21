@@ -14,7 +14,7 @@ const int flameSensorPinRight = A2;
 
 // Define thresholds for flame detection
 const int threshold = 400;
-const int lowThreshold = 200;
+const int lowThreshold = 100;
 
 // Number of readings to take from the sensor
 const int numReadings = 20;
@@ -33,8 +33,12 @@ bool isFlameDetected(int pin, int readings[], bool &lowThresholdDetected) {
   // Take multiple readings from the sensor and store them in the array
   for (int i = 0; i < numReadings; i++) {
     readings[i] = analogRead(pin);
+    Serial.print("\t ");
+    Serial.print(readings[i]);
     delay(50); // Small delay between readings for stability
   }
+  Serial.println();
+   
 
   // Compare readings to the threshold and count how many are above it
   for (int i = 0; i < numReadings; i++) {
@@ -42,7 +46,7 @@ bool isFlameDetected(int pin, int readings[], bool &lowThresholdDetected) {
       countBelowThreshold++;
     }
     if (readings[i] < lowThreshold) {
-      countBelowLowThreshold++
+      countBelowLowThreshold++;
     }
   }
   if(countBelowLowThreshold>(countBelowThreshold/2)){
@@ -117,42 +121,53 @@ void loop() {
   bool lowThresholdDetectedCenter = false;
   bool lowThresholdDetectedRight = false;
 
-  bool flameDetectedLeft = isFlameDetected(flameSensorPinLeft, readingsLeft, lowThresholdDetectedLeft);
   bool flameDetectedCenter = isFlameDetected(flameSensorPinCenter, readingsCenter, lowThresholdDetectedCenter);
+  bool flameDetectedLeft = isFlameDetected(flameSensorPinLeft, readingsLeft, lowThresholdDetectedLeft);
   bool flameDetectedRight = isFlameDetected(flameSensorPinRight, readingsRight, lowThresholdDetectedRight);
 
   if (lowThresholdDetectedLeft || lowThresholdDetectedCenter || lowThresholdDetectedRight) {
     Serial.println("Flame detected with low threshold. Stopping and spraying.");
-    digitalWrite(LED, HIGH);
     stopMoving();
+    for (int i = 0; i < 3; i++) {
+    digitalWrite(LED,HIGH);  // Turn the LED on
+    delay(10);                  // Wait for 500 milliseconds
+    digitalWrite(LED, LOW);   // Turn the LED off
+    delay(50);                  // Wait for 500 milliseconds
+  }
+  
     // Add code to start spraying here
-  } else if (flameDetectedLeft) {
-    Serial.println("Flame detected on the left.");
-    digitalWrite(LED, HIGH);
-    turnLeft();
-    delay(500);
-    stopMoving();
-    delay(1000);
+
   } else if (flameDetectedCenter) {
     Serial.println("Flame detected in the center.");
     digitalWrite(LED, HIGH);
     moveForward();
     delay(400);
+    digitalWrite(LED, LOW);
     stopMoving();
     delay(1000);
+  } else if (flameDetectedLeft) {
+    Serial.println("Flame detected on the left.");
+    digitalWrite(LED, HIGH);
+    turnLeft();
+    delay(500);
+    digitalWrite(LED, LOW);
+    stopMoving();
+    delay(1000);
+  
   } else if (flameDetectedRight) {
     Serial.println("Flame detected on the right.");
     digitalWrite(LED, HIGH);
     turnRight();
     delay(500);
+    digitalWrite(LED, LOW);
     stopMoving();
     delay(1000);
   } else {
     Serial.println("No Flame detected!");
     digitalWrite(LED, LOW);
-    moveForward();
+    stopMoving();
     delay(1000);
   }
 
-  delay(500); // Wait a bit before checking again
+  //delay(500); // Wait a bit before checking again
 }
