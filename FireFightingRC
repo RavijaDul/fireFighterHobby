@@ -1,0 +1,158 @@
+// Define motor control pins
+const int motor1Pin1 = 2;
+const int motor1Pin2 = 3;
+const int motor1EnablePin = 9; // PWM pin for motor 1 speed control
+const int motor2Pin1 = 4;
+const int motor2Pin2 = 5;
+const int motor2EnablePin = 10; // PWM pin for motor 2 speed control
+
+const int LED = 8;
+// Define flame sensor pins
+const int flameSensorPinLeft = A0;
+const int flameSensorPinCenter = A1;
+const int flameSensorPinRight = A2;
+
+// Define thresholds for flame detection
+const int threshold = 400;
+const int lowThreshold = 200;
+
+// Number of readings to take from the sensor
+const int numReadings = 20;
+int readingsLeft[numReadings];
+int readingsCenter[numReadings];
+int readingsRight[numReadings];
+
+// Motor speed
+const int motorSpeed = 100;
+
+// Function to detect flame
+bool isFlameDetected(int pin, int readings[], bool &lowThresholdDetected) {
+  int countBelowThreshold = 0;
+  int countBelowLowThreshold = 0;
+  lowThresholdDetected = false;
+  // Take multiple readings from the sensor and store them in the array
+  for (int i = 0; i < numReadings; i++) {
+    readings[i] = analogRead(pin);
+    delay(50); // Small delay between readings for stability
+  }
+
+  // Compare readings to the threshold and count how many are above it
+  for (int i = 0; i < numReadings; i++) {
+    if (readings[i] < threshold) {
+      countBelowThreshold++;
+    }
+    if (readings[i] < lowThreshold) {
+      countBelowLowThreshold++
+    }
+  }
+  if(countBelowLowThreshold>(countBelowThreshold/2)){
+    lowThresholdDetected = true;
+  }
+
+  // Decide if a flame is detected based on the count of readings above the threshold
+  return countBelowThreshold > numReadings / 2;
+}
+
+// Function to move the robot forward
+void moveForward() {
+  digitalWrite(motor1Pin1, HIGH);
+  digitalWrite(motor1Pin2, LOW);
+  digitalWrite(motor2Pin1, HIGH);
+  digitalWrite(motor2Pin2, LOW);
+  analogWrite(motor1EnablePin, motorSpeed);
+  analogWrite(motor2EnablePin, motorSpeed);
+}
+
+// Function to stop the robot
+void stopMoving() {
+  digitalWrite(motor1Pin1, LOW);
+  digitalWrite(motor1Pin2, LOW);
+  digitalWrite(motor2Pin1, LOW);
+  digitalWrite(motor2Pin2, LOW);
+  analogWrite(motor1EnablePin, 0);
+  analogWrite(motor2EnablePin, 0);
+}
+
+// Function to turn the robot left
+void turnLeft() {
+  digitalWrite(motor1Pin1, LOW);
+  digitalWrite(motor1Pin2, HIGH);
+  digitalWrite(motor2Pin1, HIGH);
+  digitalWrite(motor2Pin2, LOW);
+  analogWrite(motor1EnablePin, motorSpeed);
+  analogWrite(motor2EnablePin, motorSpeed);
+}
+
+// Function to turn the robot right
+void turnRight() {
+  digitalWrite(motor1Pin1, HIGH);
+  digitalWrite(motor1Pin2, LOW);
+  digitalWrite(motor2Pin1, LOW);
+  digitalWrite(motor2Pin2, HIGH);
+  analogWrite(motor1EnablePin, motorSpeed);
+  analogWrite(motor2EnablePin, motorSpeed);
+}
+
+void setup() {
+  // Initialize serial communication
+  Serial.begin(9600);
+
+  // Initialize motor control pins as outputs
+  pinMode(motor1Pin1, OUTPUT);
+  pinMode(motor1Pin2, OUTPUT);
+  pinMode(motor1EnablePin, OUTPUT);
+  pinMode(motor2Pin1, OUTPUT);
+  pinMode(motor2Pin2, OUTPUT);
+  pinMode(motor2EnablePin, OUTPUT);
+  pinMode(LED, OUTPUT);
+
+  // Initialize flame sensor pins as input
+  pinMode(flameSensorPinLeft, INPUT);
+  pinMode(flameSensorPinCenter, INPUT);
+  pinMode(flameSensorPinRight, INPUT);
+}
+
+void loop() {
+  bool lowThresholdDetectedLeft = false;
+  bool lowThresholdDetectedCenter = false;
+  bool lowThresholdDetectedRight = false;
+
+  bool flameDetectedLeft = isFlameDetected(flameSensorPinLeft, readingsLeft, lowThresholdDetectedLeft);
+  bool flameDetectedCenter = isFlameDetected(flameSensorPinCenter, readingsCenter, lowThresholdDetectedCenter);
+  bool flameDetectedRight = isFlameDetected(flameSensorPinRight, readingsRight, lowThresholdDetectedRight);
+
+  if (lowThresholdDetectedLeft || lowThresholdDetectedCenter || lowThresholdDetectedRight) {
+    Serial.println("Flame detected with low threshold. Stopping and spraying.");
+    digitalWrite(LED, HIGH);
+    stopMoving();
+    // Add code to start spraying here
+  } else if (flameDetectedLeft) {
+    Serial.println("Flame detected on the left.");
+    digitalWrite(LED, HIGH);
+    turnLeft();
+    delay(500);
+    stopMoving();
+    delay(1000);
+  } else if (flameDetectedCenter) {
+    Serial.println("Flame detected in the center.");
+    digitalWrite(LED, HIGH);
+    moveForward();
+    delay(400);
+    stopMoving();
+    delay(1000);
+  } else if (flameDetectedRight) {
+    Serial.println("Flame detected on the right.");
+    digitalWrite(LED, HIGH);
+    turnRight();
+    delay(500);
+    stopMoving();
+    delay(1000);
+  } else {
+    Serial.println("No Flame detected!");
+    digitalWrite(LED, LOW);
+    moveForward();
+    delay(1000);
+  }
+
+  delay(500); // Wait a bit before checking again
+}
